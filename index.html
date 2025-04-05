@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DM Screen v0.6.9.11 - Perfect App</title>
+  <!-- Importing a clear, modern font -->
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible&display=swap" rel="stylesheet">
+  <style>
+    /* Global Reset and Base Styles */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: 'Atkinson Hyperlegible', Arial, sans-serif;
+      background: url('https://www.transparenttextures.com/patterns/dark-fantasy.png');
+      color: #000;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      line-height: 1.4;
+    }
+    /* Controls (compact top line) */
+    #controls {
+      padding: 0.5rem;
+      background: #222;
+      color: #fff;
+      display: flex;
+      gap: 0.25rem;
+      align-items: center;
+      justify-content: center;
+    }
+    #controls button {
+      background: #444;
+      border: none;
+      padding: 0.3rem 0.5rem;
+      color: #fff;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      transition: background 0.2s;
+    }
+    #controls button:hover {
+      background: #666;
+    }
+    /* Canvas for Cards */
+    #canvas {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 0.25rem;
+      padding: 0.25rem;
+      background: linear-gradient(to bottom, #333, #000);
+    }
+    /* Card Styles */
+    .card {
+      background: linear-gradient(135deg, #ffffff, #f0f0f0);
+      border: 3px ridge #000;
+      padding: 0.5rem;
+      resize: both;
+      overflow: auto;
+      position: relative;
+      cursor: move;
+      transition: transform 0.2s;
+    }
+    .card:hover {
+      transform: scale(1.02);
+    }
+    .close-btn {
+      position: absolute;
+      top: 0.25rem;
+      right: 0.25rem;
+      background: #ff5c5c;
+      border: none;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      line-height: 16px;
+      text-align: center;
+    }
+    .card-header {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-bottom: 0.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: default;
+    }
+    /* Details: Stats remains open; Attributes, Spell Slots, and Funds start closed */
+    details {
+      margin-bottom: 0.25rem;
+    }
+    details:not([data-start-open="true"]) {
+      /* They start closed if no open attribute */
+    }
+    .card-content {
+      overflow: visible;
+    }
+    .card-footer {
+      margin-top: 0.25rem;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+    /* Input Styles within Cards */
+    .card input[type="text"],
+    .card input[type="number"],
+    .card select,
+    .card textarea {
+      width: 100%;
+      padding: 0.2rem;
+      margin-bottom: 0.25rem;
+      text-align: center;
+      background: #fff;
+      color: #000;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    .card textarea {
+      text-align: left;
+      resize: vertical;
+    }
+    /* Responsive Adjustments */
+    @media screen and (max-width: 600px) {
+      #canvas { grid-template-columns: 1fr; }
+    }
+    /* Dark Mode using prefers-color-scheme */
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: url('https://www.transparenttextures.com/patterns/dark-fantasy.png');
+        color: #fff;
+      }
+      #controls {
+        background: #111;
+      }
+      .card {
+        background: linear-gradient(135deg, #333, #555);
+        border-color: #555;
+        color: #fff;
+      }
+      .card input,
+      .card textarea,
+      .card select {
+        background: #555;
+        color: #fff;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <!-- Controls for adding/removing cards -->
+    <div id="controls" role="region" aria-label="Card Controls">
+      <button onclick="addCard()">Add Card</button>
+      <button onclick="removeLastCard()">Remove Last Card</button>
+    </div>
+    <!-- Canvas where cards will be dynamically added -->
+    <section id="canvas" aria-label="DM Cards Canvas"></section>
+  </main>
+
+  <script>
+    let cardCount = 0;
+    // Fantasy-themed options for individual cards with gradient colors.
+    // Primary theme menu: first option "Default", second "High Fantasy"
+    const themes = [
+      { name: "Default", primary: "#000000", secondary: "#000000" },
+      { name: "High Fantasy", primary: "#ffffff", secondary: "#ffffff" },
+      { name: "Celestial Moon", primary: "#ffffff", secondary: "#a8c0ff" },
+      { name: "Shadow Realm", primary: "#1a1a1a", secondary: "#3a3a3a" },
+      { name: "Mystic Fog", primary: "#808080", secondary: "#c0c0c0" },
+      { name: "Dragon's Blood", primary: "#8b0000", secondary: "#ff4d4d" },
+      { name: "Sunfire", primary: "#ff8c00", secondary: "#ffe0b2" },
+      { name: "Enchanted Forest", primary: "#228B22", secondary: "#a8d5ba" },
+      { name: "Oceanic Depths", primary: "#0000cd", secondary: "#89cff0" },
+      { name: "Twilight Violet", primary: "#8a2be2", secondary: "#d3a4ff" },
+      { name: "Mystic Amethyst", primary: "#800080", secondary: "#e0aaff" },
+      { name: "Frostbite", primary: "#00ced1", secondary: "#b2ffff" },
+      { name: "Emerald Dream", primary: "#50c878", secondary: "#b7e1cd" },
+      { name: "Ruby Radiance", primary: "#ff0000", secondary: "#ffb3b3" },
+      { name: "Golden Dawn", primary: "#ffd700", secondary: "#fffacd" }
+    ];
+    // In the secondary (Screen51) theme menu, first option "Default" and second "High Fantasy"
+    // will be handled in switchCardTheme.
+    
+    // Global theme cycle (if needed in future)
+    const globalThemes = [
+      { background: "#ffffff", color: "#000000" },
+      { background: "#000000", color: "#ffffff" },
+      { background: "#ff0000", color: "#ffff00" }
+    ];
+    let currentGlobalTheme = 0;
+    // Undo/redo stacks stored per card (in session memory)
+    const undoStacks = {};
+    const redoStacks = {};
+
+    // Auto-save on input (updates localStorage and undo stack)
+    function attachAutoSave(el) {
+      const id = el.id;
+      if (!undoStacks[id]) undoStacks[id] = [];
+      el.addEventListener('input', () => {
+        undoStacks[id].push(el.innerText);
+        localStorage.setItem(`dmcard-${id}`, el.innerText);
+      });
+    }
+
+    // Create a new card with default sections
+    function addCard() {
+      const cardId = `card-${cardCount}`;
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.setAttribute('draggable', 'true');
+      card.id = cardId;
+
+      // Card HTML content with cycle buttons for the primary theme menu.
+      // The secondary theme menu has a dropdown (with "Default" and "High Fantasy" as first options).
+      card.innerHTML = `
+        <button class="close-btn" aria-label="Close Card" onclick="removeCard(this)">X</button>
+        <input type="text" placeholder="Card Name:" style="font-size:1.2rem;" aria-label="Card Name">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+          <div style="flex:1; display:flex; gap:0.25rem;">
+            <select onchange="updateCardTheme(this)" aria-label="Select Card Theme">
+              ${themes.map(t => `<option value="${t.primary}" data-secondary="${t.secondary}">${t.name}</option>`).join('')}
+            </select>
+            <button onclick="cycleCardTheme(this)" aria-label="Cycle Card Theme">⟳</button>
+          </div>
+          <div style="flex:1; display:flex; gap:0.25rem;">
+            <select id="screen51-themes" onchange="switchCardTheme(this)" aria-label="Select Screen51 Theme">
+              <option value="Default" data-secondary="Default">Default</option>
+              <option value="High Fantasy" data-secondary="High Fantasy">High Fantasy</option>
+              ${themes.slice(2).map(t => `<option value="${t.primary}" data-secondary="${t.secondary}">${t.name}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        ${createDetailsSection('Stats', cardCount, ["STR","DEX","CON","INT","WIS","CHA"], 6, true)}
+        ${createDetailsSection('Attributes', cardCount, ["HP","AC","DC","PP","Ammo","Charge"], 6, false)}
+        ${createDetailsSection('Spell Slots', cardCount, Array.from({length: 9}, (_,i) => i+1), 9, false)}
+        ${createDetailsSection('Funds', cardCount, ["P","G","E","S","C"], 5, false)}
+        <br>
+        <button onclick="generateStats(this)">Generate Stats</button>
+        <button onclick="resetCard(this)">Reset Card</button>
+        <br><br>
+        <label>Actions:</label>
+        <textarea placeholder="Actions:" aria-label="Actions"></textarea>
+        <label>Spells:</label>
+        <textarea placeholder="Spells:" aria-label="Spells"></textarea>
+        <label>Inventory:</label>
+        <textarea placeholder="Inventory:" aria-label="Inventory"></textarea>
+        <label>Notes:</label>
+        <textarea placeholder="Notes:" aria-label="Notes"></textarea>
+      `;
+      document.getElementById('canvas').appendChild(card);
+
+      // Attach auto-save to all editable areas in the card
+      card.querySelectorAll('[contenteditable="true"]').forEach(el => {
+        if (!el.id) el.id = `${cardId}-editable-${Math.random().toString(36).substring(2,7)}`;
+        attachAutoSave(el);
+      });
+      // Enable drag and drop for this card
+      addDragAndDrop(card);
+      cardCount++;
+      // Set default theme for card (first option of primary theme select)
+      updateCardTheme(card.querySelector('select'));
+    }
+
+    // Helper to create a details section with header and content area.
+    // The "open" attribute is added only if isOpen is true.
+    function createDetailsSection(title, cardIndex, headers, cellCount, isOpen) {
+      const openAttr = isOpen ? 'open' : '';
+      return `
+      <details ${openAttr}>
+        <summary class="card-header"><span>${title}</span></summary>
+        <div class="card-content" id="${title.toLowerCase()}-${cardIndex}" contenteditable="true">
+          <table>
+            <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+            <tr ondragover="allowDrop(event)" ondrop="dropCell(event)">
+              ${Array(cellCount).fill('<td><input type="number" min="0" max="99" value="0" ondragstart="dragCell(event)" draggable="true" /></td>').join('')}
+            </tr>
+          </table>
+        </div>
+      </details>`;
+    }
+
+    // Remove a specific card
+    function removeCard(btn) {
+      const card = btn.closest('.card');
+      card.remove();
+      cardCount--;
+    }
+
+    // Remove the last card in the canvas
+    function removeLastCard() {
+      const canvas = document.getElementById('canvas');
+      if (canvas.lastElementChild) {
+        canvas.removeChild(canvas.lastElementChild);
+        cardCount--;
+      }
+    }
+
+    // Reset inputs and textareas within a card
+    function resetCard(btn) {
+      const card = btn.closest('.card');
+      card.querySelectorAll('input[type="number"]').forEach(el => el.value = 0);
+      card.querySelectorAll('input[type="text"]:not([value]), textarea').forEach(el => el.value = '');
+      card.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+      updateCardTheme(card.querySelector('select'));
+    }
+
+    // Generate stats (roll 4d6, drop lowest) for Stats section
+    function generateStats(btn) {
+      const card = btn.closest('.card');
+      const statsInputs = card.querySelector('details:nth-of-type(1) tr:nth-of-type(2)').querySelectorAll('input');
+      statsInputs.forEach(input => {
+        const rolls = Array.from({length: 4}, () => Math.floor(Math.random() * 6) + 1);
+        const sorted = [...rolls].sort((a, b) => b - a);
+        input.value = sorted.slice(0, 3).reduce((sum, val) => sum + val, 0);
+        input.title = `Rolled: ${rolls.join(', ')} (dropped ${sorted[3]})`;
+      });
+      // Reset spell slots to 0
+      const spellSlotInputs = card.querySelector('details:nth-of-type(3) tr:nth-of-type(2)').querySelectorAll('input');
+      spellSlotInputs.forEach(input => input.value = 0);
+    }
+
+    // Update card theme based on the primary theme dropdown selection.
+    // If "Default" is selected, set background to black.
+    // If "High Fantasy" is selected, set background to white.
+    function updateCardTheme(select) {
+      const card = select.closest('.card');
+      const optionText = select.options[select.selectedIndex].text;
+      if (optionText === "Default") {
+        card.style.background = "black";
+      } else if (optionText === "High Fantasy") {
+        card.style.background = "white";
+      } else {
+        const primary = select.value;
+        const secondary = select.options[select.selectedIndex].dataset.secondary;
+        card.style.background = `linear-gradient(135deg, ${primary}, ${secondary})`;
+      }
+    }
+
+    // Cycle through available themes for a card (primary theme)
+    // This cycles both the primary and secondary menus in parallel.
+    function cycleCardTheme(btn) {
+      const card = btn.closest('.card');
+      let index = parseInt(card.getAttribute('data-theme-index')) || 0;
+      index = (index + 1) % themes.length;
+      card.setAttribute('data-theme-index', index);
+      const primarySelect = card.querySelector('select');
+      const secondarySelect = card.querySelector('#screen51-themes');
+      primarySelect.selectedIndex = index;
+      secondarySelect.selectedIndex = index;
+      updateCardTheme(primarySelect);
+      switchCardTheme(secondarySelect);
+    }
+
+    // Apply the Screen51 theme (secondary theme) to a card.
+    // If "Default" is selected, set fonts to white.
+    // If "High Fantasy" is selected, set fonts to black.
+    function switchCardTheme(select) {
+      const card = select.closest('.card');
+      const optionText = select.options[select.selectedIndex].text;
+      if (optionText === "Default") {
+        card.style.color = "#ffffff";
+        card.querySelectorAll('input, select, textarea').forEach(el => {
+          el.style.backgroundColor = "";
+          el.style.color = "#ffffff";
+        });
+        card.querySelectorAll('th, td, summary, label').forEach(el => {
+          el.style.color = "#ffffff";
+        });
+      } else if (optionText === "High Fantasy") {
+        card.style.color = "#000000";
+        card.querySelectorAll('input, select, textarea').forEach(el => {
+          el.style.backgroundColor = "#ffffff";
+          el.style.color = "#000000";
+        });
+        card.querySelectorAll('th, td, summary, label').forEach(el => {
+          el.style.color = "#000000";
+        });
+      } else {
+        const selectedPrimary = select.value;
+        const secondary = select.options[select.selectedIndex].dataset.secondary;
+        const contrastColor = invertColor(selectedPrimary);
+        card.style.color = contrastColor;
+        card.querySelectorAll('input, select, textarea').forEach(el => {
+          el.style.backgroundColor = secondary;
+          el.style.color = contrastColor;
+        });
+        card.querySelectorAll('th, td, summary, label').forEach(el => {
+          el.style.color = contrastColor;
+        });
+      }
+    }
+
+    // Helper: calculate brightness of a hex color and return a contrasting color.
+    function invertColor(hex) {
+      hex = hex.replace(/^#/, '');
+      if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+      }
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      return brightness < 128 ? '#ffffff' : '#000000';
+    }
+
+    // Drag-and-Drop functionality for cards
+    function addDragAndDrop(card) {
+      card.addEventListener('dragstart', onDragStart);
+      card.addEventListener('dragover', onDragOver);
+      card.addEventListener('drop', onDropCard);
+      card.addEventListener('dragend', onDragEnd);
+    }
+    let draggedCard;
+    function onDragStart(e) {
+      draggedCard = this;
+      e.dataTransfer.effectAllowed = 'move';
+      this.style.opacity = '0.5';
+    }
+    function onDragOver(e) {
+      e.preventDefault();
+      return false;
+    }
+    function onDropCard(e) {
+      e.stopPropagation();
+      if (draggedCard !== this) {
+        const container = document.getElementById('canvas');
+        let cards = Array.from(container.children);
+        let draggedIndex = cards.indexOf(draggedCard);
+        let targetIndex = cards.indexOf(this);
+        if (draggedIndex < targetIndex) {
+          container.insertBefore(draggedCard, this.nextSibling);
+        } else {
+          container.insertBefore(draggedCard, this);
+        }
+      }
+      return false;
+    }
+    function onDragEnd(e) {
+      this.style.opacity = '1';
+    }
+
+    // Drag and drop for table cells (swapping values and tooltips)
+    function dragCell(e) {
+      e.dataTransfer.setData("text/plain", e.target.value);
+      e.dataTransfer.setData("cellId", e.target.id);
+    }
+    function dropCell(e) {
+      e.preventDefault();
+      const sourceValue = e.dataTransfer.getData("text/plain");
+      const sourceCellId = e.dataTransfer.getData("cellId");
+      const target = e.target.closest('input');
+      if (target && target.type === "number") {
+        const sourceCell = document.getElementById(sourceCellId);
+        const tempValue = target.value;
+        const tempTitle = target.title;
+        target.value = sourceValue;
+        target.title = sourceCell.title;
+        sourceCell.value = tempValue;
+        sourceCell.title = tempTitle;
+      }
+    }
+    function allowDrop(e) {
+      e.preventDefault();
+    }
+
+    // Initialize default cards on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      addCard(); // Initiative Tracker
+      addCard(); // Conditions
+      addCard(); // Monster Stats
+      addCard(); // Custom Notes
+    });
+  </script>
+</body>
+</html>
