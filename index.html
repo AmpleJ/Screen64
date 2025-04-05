@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -110,7 +111,6 @@
     }
     /* Input Styles within Cards */
     .card input[type="text"],
-    .card input[type="number"],
     .card select,
     .card textarea {
       width: 100%;
@@ -262,6 +262,12 @@
         if (!el.id) el.id = `${cardId}-editable-${Math.random().toString(36).substring(2,7)}`;
         attachAutoSave(el);
       });
+      // Attach math evaluation to table cells
+      card.querySelectorAll('input.math-input').forEach(input => {
+        input.addEventListener('blur', function() {
+          evaluateMath(this);
+        });
+      });
       // Enable drag and drop for this card
       addDragAndDrop(card);
       cardCount++;
@@ -271,6 +277,7 @@
 
     // Helper to create a details section with header and content area.
     // The "open" attribute is added only if isOpen is true.
+    // Each input now gets a unique id and a class of "math-input" for math evaluation.
     function createDetailsSection(title, cardIndex, headers, cellCount, isOpen) {
       const openAttr = isOpen ? 'open' : '';
       return `
@@ -280,7 +287,14 @@
           <table>
             <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
             <tr ondragover="allowDrop(event)" ondrop="dropCell(event)">
-              ${Array(cellCount).fill('<td><input type="number" min="0" max="99" value="0" ondragstart="dragCell(event)" draggable="true" /></td>').join('')}
+              ${Array.from({ length: cellCount }, (_, i) => `
+                <td>
+                  <input type="text" class="math-input" 
+                         id="${title.toLowerCase()}-${cardIndex}-${i}" 
+                         value="0" 
+                         ondragstart="dragCell(event)" 
+                         draggable="true" />
+                </td>`).join('')}
             </tr>
           </table>
         </div>
@@ -303,13 +317,19 @@
       }
     }
 
-    // Reset inputs and textareas within a card
+    // Reset inputs and textareas within a card and reset secondary theme to default
     function resetCard(btn) {
       const card = btn.closest('.card');
-      card.querySelectorAll('input[type="number"]').forEach(el => el.value = 0);
-      card.querySelectorAll('input[type="text"]:not([value]), textarea').forEach(el => el.value = '');
+      // Reset math inputs (table cells)
+      card.querySelectorAll('input.math-input').forEach(el => el.value = '0');
+      // Reset other text inputs and textareas
+      card.querySelectorAll('input[type="text"]:not(.math-input), textarea').forEach(el => el.value = '');
+      // Reset all selects to default (first option)
       card.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
       updateCardTheme(card.querySelector('select'));
+      const secondarySelect = card.querySelector('#screen51-themes');
+      secondarySelect.selectedIndex = 0;
+      switchCardTheme(secondarySelect);
     }
 
     // Generate stats (roll 4d6, drop lowest) for Stats section
@@ -324,7 +344,7 @@
       });
       // Reset spell slots to 0
       const spellSlotInputs = card.querySelector('details:nth-of-type(3) tr:nth-of-type(2)').querySelectorAll('input');
-      spellSlotInputs.forEach(input => input.value = 0);
+      spellSlotInputs.forEach(input => input.value = '0');
     }
 
     // Update card theme based on the primary theme dropdown selection.
@@ -457,7 +477,7 @@
       const sourceValue = e.dataTransfer.getData("text/plain");
       const sourceCellId = e.dataTransfer.getData("cellId");
       const target = e.target.closest('input');
-      if (target && target.type === "number") {
+      if (target && target.tagName === "INPUT") {
         const sourceCell = document.getElementById(sourceCellId);
         const tempValue = target.value;
         const tempTitle = target.title;
@@ -469,6 +489,22 @@
     }
     function allowDrop(e) {
       e.preventDefault();
+    }
+
+    // Evaluate math expressions in numerical fields.
+    // If the user types "2+2", the expression will be evaluated and replaced with the sum.
+    function evaluateMath(input) {
+      const expr = input.value;
+      // Process if the input contains any math operator
+      if (/[+\-*/]/.test(expr)) {
+        try {
+          // Use Function to safely evaluate the math expression
+          const result = Function('"use strict"; return (' + expr + ')')();
+          input.value = result;
+        } catch (error) {
+          console.error("Invalid math expression:", expr, error);
+        }
+      }
     }
 
     // Initialize default cards on page load
